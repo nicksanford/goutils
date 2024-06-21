@@ -287,6 +287,8 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 	// that its local description should change. Such as when a video track is added that should be
 	// streamed to the peer.
 	peerConn.OnNegotiationNeeded(func() {
+		logger.Info("OnNegotiationNeeded START")
+		defer logger.Info("OnNegotiationNeeded END")
 		select {
 		case <-negOpened:
 		default:
@@ -294,6 +296,7 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 			// operation.
 			return
 		}
+		logger.Info("OnNegotiationNeeded NEGOPENED")
 
 		negMu.Lock()
 		defer negMu.Unlock()
@@ -305,6 +308,7 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 			return
 		}
 
+		logger.Info("OnNegotiationNeeded offer.SDP: " + offer.SDP)
 		// Dan: It's not clear to me why an offer is created from a `PeerConnection` just to call
 		// `PeerConnection.SetLocalDescription`. And then when encoding the `Description` ("SDP")
 		// for sending to the peer, we must call `PeerConnection.LocalDescription` rather than using
@@ -315,6 +319,7 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 			return
 		}
 
+		logger.Info("OnNegotiationNeeded peerConn.LocalDescription().SDP: " + peerConn.LocalDescription().SDP)
 		// Encode and send the new local description to the peer over the `negotiation` channel. The
 		// peer will respond over the negotiation channel with an answer. That answer will be used to
 		// update the remote description.
@@ -330,6 +335,8 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 	})
 
 	negotiationChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+		logger.Info("OnMessage START")
+		defer logger.Info("OnMessage END")
 		negMu.Lock()
 		defer negMu.Unlock()
 
@@ -339,6 +346,7 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 			return
 		}
 
+		logger.Info("OnMessage description.SDP: " + description.SDP)
 		// A new description was received over the negotiation channel. Use that to update the remote
 		// description.
 		if err := peerConn.SetRemoteDescription(description); err != nil {
@@ -354,6 +362,7 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 		if description.Type != webrtc.SDPTypeOffer {
 			return
 		}
+		logger.Info("OnMessage is offer")
 
 		// Dan: It's unclear to me how error handling should happen here. Receiving an offer implies
 		// the peer's local description is not in sync with our remote description for that
@@ -364,11 +373,13 @@ func ConfigureForRenegotiation(peerConn *webrtc.PeerConnection, logger golog.Log
 			logger.Errorw("renegotiation: error creating answer", "error", err)
 			return
 		}
+		logger.Info("OnMessage answer.SDP:" + answer.SDP)
 		if err := peerConn.SetLocalDescription(answer); err != nil {
 			logger.Errorw("renegotiation: error setting local description", "error", err)
 			return
 		}
 
+		logger.Info("OnMessage peerConn.LocalDescription().SDP:" + peerConn.LocalDescription().SDP)
 		encodedSDP, err := EncodeSDP(peerConn.LocalDescription())
 		if err != nil {
 			logger.Errorw("renegotiation: error encoding SDP", "error", err)
